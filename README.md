@@ -1,120 +1,51 @@
 # glinet-sshkeymanagement
 
-A GL.iNet router panel for managing the SSH public keys authorised to log in as
-root, designed to survive reboots **and firmware upgrades**.
+Add and remove the SSH public keys that may log in to a GL.iNet router, from the
+router's own admin panel. Keys survive reboots and firmware upgrades.
 
-Two opkg packages, `Architecture: all`:
+![SSH Keys panel](sshkeys-panel.png)
 
-| Package | Role |
-| --- | --- |
-| `gl-sdk4-sshkeys` | Backend: rpc handler, uci key store, boot-time renderer |
-| `gl-sdk4-ui-sshkeysview` | Frontend: the GL oui-httpd panel view |
+> The image is a UI mockup, not yet a capture from a device.
 
-## Design
+## Install
 
-### Source of truth: uci, not authorized_keys
+On the router:
 
-Keys live in `/etc/config/sshkeys` as `config key` sections (name, type, base64
-blob, comment, enabled). `authorized_keys` is a *rendered artifact*, never the
-store. This lets the panel add/remove/toggle keys transactionally and keeps GL's
-own cloud-management keys untouched.
-
-### Rendering: a managed block
-
-`/usr/bin/gl_sshkeys render` rewrites only the region between
-
-```
-# --- gl-sdk4-sshkeys managed block: do not edit between markers ---
-...our keys...
-# --- end gl-sdk4-sshkeys managed block ---
+```sh
+curl -fsSL https://digitalcybersoft.github.io/glinet-sshkeymanagement/setup.sh -o /tmp/setup.sh
+sh /tmp/setup.sh
 ```
 
-in `/etc/dropbear/authorized_keys`. Everything outside the markers is preserved
-verbatim, so GL's cloud key and any hand-added keys are never clobbered. The
-rewrite is idempotent.
+Then open **System → SSH Keys** in the panel.
 
-### Surviving firmware upgrades
+## What it does
 
-A GL sysupgrade wipes `/overlay`, so an opkg-installed package cannot be assumed
-to persist. Two independent mechanisms guarantee you are never locked out:
+- Paste a public key to authorise it; remove or disable it later.
+- Accepts `ssh-ed25519`, `ssh-rsa`, `ecdsa`, and FIDO/YubiKey `sk-ssh-ed25519` /
+  `sk-ecdsa` keys.
+- Keys live in `/etc/config/sshkeys` and are rendered into dropbear's
+  `authorized_keys` as a managed block, leaving GL's own keys untouched.
+- An init script re-applies them on every boot, and `keep.d` preserves them
+  across firmware upgrades, so you are never locked out by an update.
 
-1. **`lib/upgrade/keep.d/*`** lists the files sysupgrade must carry across the
-   flash: the uci store, the rendered `authorized_keys`, the rpc handler, the
-   renderer, and the init script. sysupgrade reads keep.d *before* wiping the
-   overlay, so these files land in the new rootfs.
-2. **`/etc/init.d/sshkeys` (START=95)** re-renders `authorized_keys` from the
-   preserved uci store on every boot. Even if new firmware ships a pristine
-   `authorized_keys`, your keys are re-applied before you need them.
+## Packages
 
-The panel bundle itself is also kept via keep.d (best-effort); if a firmware
-release ever displaces it, reinstall the two packages from the feed. Your SSH
-access does not depend on the panel surviving, only on the keys surviving.
+Both `Architecture: all`, served from one feed for every device:
 
-### Security-key (FIDO / YubiKey) support
-
-`sk-ssh-ed25519@openssh.com` and `sk-ecdsa-sha2-nistp256@openssh.com` are accepted.
-dropbear supports these in `authorized_keys` since 2022.82 (OpenWrt 22.03.x /
-current GL firmware). Note: the `no-touch-required` option requires dropbear
-2022.83; v1 stores bare keys only (no options prefixes), so keys are touch-required.
+- `gl-sdk4-sshkeys` — backend (rpc + uci store + boot renderer)
+- `gl-sdk4-ui-sshkeysview` — the admin-panel view
 
 ## Build
 
 ```sh
-tools/build_gui.sh          # -> gui/*_all.ipk (gzip-tar; the format GL's opkg extracts)
+tools/build_gui.sh                       # -> gui/*_all.ipk
+tools/assemble_site.sh _site             # -> the Pages feed
 ```
 
-`gui-src/.../views/view.js` is the readable bundle source; the packer renames and
-gzips it to `<pkg>.common.js.gz` (the exact path nginx `gzip_static` serves).
-
-## Install (on-device)
-
-Via the self-hosted feed (see Publish below):
-
-```sh
-curl -fsSL https://digitalcybersoft.github.io/glinet-sshkeymanagement/setup.sh -o /tmp/setup.sh
-sh /tmp/setup.sh --dry-run     # detect arch, change nothing
-sh /tmp/setup.sh               # add feed + install
-```
-
-Or from local ipks:
-
-```sh
-opkg install ./gui/gl-sdk4-sshkeys_1.0.0-1_all.ipk ./gui/gl-sdk4-ui-sshkeysview_1.0.0-1_all.ipk
-```
-
-Then open the router panel; the entry appears under **System → SSH Keys**.
-
-## Publish (its own GitHub Pages feed)
-
-This repo *is* an opkg feed served at
-`https://digitalcybersoft.github.io/glinet-sshkeymanagement/`. The `pages.yml`
-workflow builds both ipks (`tools/build_gui.sh`), assembles a per-arch feed
-(`tools/assemble_site.sh` fans the two `Architecture: all` ipks into all seven
-arch dirs and runs `mkindex.py`), and deploys to Pages on every push to `main`.
-
-To build the site locally:
-
-```sh
-tools/build_gui.sh && tools/assemble_site.sh _site
-```
-
-## RPC surface (`object: sshkeys`)
-
-| Method | Args | Returns |
-| --- | --- | --- |
-| `list` | – | `{ keys: [{id,name,type,comment,tail,enabled}] }` |
-| `add` | `{name,key}` | `{ok:true,id}` or `{error}` |
-| `remove` | `{id}` | `{ok:true}` or `{error}` |
-| `set_enabled` | `{id,enabled}` | `{ok:true}` or `{error}` |
-
-`add` validates the key type (rejects anything dropbear cannot verify), requires
-base64 key data, and rejects options-prefixed lines and duplicates.
+`pages.yml` does both and deploys on every push to `main`.
 
 ## Status
 
-v1. Backend logic (parser, managed-block renderer) is unit-tested off-device. The
-panel bundle is hand-authored to GL's webpack-UMD contract and must be verified on
-real hardware: confirm the SPA routes the new `sshkeysview` (GL panels are loaded
-data-driven from `menu.d`, but a brand-new view name should be smoke-tested first),
-and confirm `parent: "system"` resolves to GL's System menu group on your firmware
-(the exact parent token was not read off a device).
+Backend logic (key parser, managed-block renderer) is unit-tested. The panel
+bundle has not yet been run on hardware: confirm the SPA routes the `sshkeysview`
+view and that it lands under **System**.
