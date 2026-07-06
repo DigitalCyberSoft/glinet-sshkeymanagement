@@ -11,6 +11,7 @@
         "empty": "No keys yet. Paste a public key above to add one.",
         "err_invalid": "That does not look like a valid SSH public key.",
         "err_duplicate": "That key is already installed.",
+        "err_stale": "That key was already changed elsewhere. The list has been refreshed.",
         "added": "Key added.",
         "added_n": "{n} keys added.",
         "skipped_n": "{n} duplicate keys skipped.",

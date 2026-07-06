@@ -115,17 +115,22 @@ module.exports = function(t) {
           }
           t.confirmId = "";
           call("remove", { id: k.id }).then(function(r) {
-            if (!(r && r.error)) {
-              t.$message.success(t.$t("sshkeys.removed"));
-              t.load()
+            if (r && r.error) {
+              // stale id (list changed underneath us) or backend refusal: say
+              // so and re-sync rather than failing silently
+              t.$message.error(r.error === "not found" ? t.$t("sshkeys.err_stale") : r.error);
+              t.load();
+              return
             }
+            t.$message.success(t.$t("sshkeys.removed"));
+            t.load()
           })
         },
         toggle: function(k, v) {
           var t = this;
           call("set_enabled", { id: k.id, enabled: !!v }).then(function(r) {
             if (r && r.error) {
-              t.$message.error(r.error);
+              t.$message.error(r.error === "not found" ? t.$t("sshkeys.err_stale") : r.error);
               t.load()
             }
           })
