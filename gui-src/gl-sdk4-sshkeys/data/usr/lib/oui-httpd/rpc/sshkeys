@@ -45,7 +45,9 @@ local function section_name(blob)
     for i = 1, #blob do
         h = (h * 33 + blob:byte(i)) % 4294967296
     end
-    return string.format("k%08x", h)
+    -- format as two 16-bit halves: LuaJIT's %x refuses values >= 2^31
+    -- ("integer expected, got number"), which a 32-bit hash hits half the time
+    return string.format("k%04x%04x", math.floor(h / 65536), h % 65536)
 end
 
 -- Parse one authorized_keys line into {type, blob, comment}. Rejects anything
