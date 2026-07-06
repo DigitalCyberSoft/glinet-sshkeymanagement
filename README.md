@@ -5,8 +5,6 @@ router's own admin panel. Keys survive reboots and firmware upgrades.
 
 ![SSH Keys panel](sshkeys-panel.png)
 
-> The image is a UI mockup, not yet a capture from a device.
-
 ## Install
 
 Feed URL (one feed, every device):
@@ -61,6 +59,8 @@ tools/assemble_site.sh _site             # -> the Pages feed
 
 ## Status
 
-Backend logic (key parser, managed-block renderer) is unit-tested. The panel
-bundle has not yet been run on hardware: confirm the SPA routes the `sshkeysview`
-view and that it lands under **System**.
+Verified on a GL.iNet router running firmware 4.9.0 (aarch64): the panel loads
+under **System → SSH Keys**, adds single and multi-key (one per line) pastes,
+accepts `ssh-*`, `ecdsa-*`, and `sk-*@openssh.com` types, toggles keys on/off,
+removes them, and re-renders the managed `authorized_keys` block. Stored keys
+survive a package upgrade (uci conffile) and a reboot (init re-render).
