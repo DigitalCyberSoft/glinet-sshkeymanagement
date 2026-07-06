@@ -68,19 +68,35 @@ gzips it to `<pkg>.common.js.gz` (the exact path nginx `gzip_static` serves).
 
 ## Install (on-device)
 
+Via the self-hosted feed (see Publish below):
+
 ```sh
-opkg install ./gl-sdk4-sshkeys_1.0.0-1_all.ipk ./gl-sdk4-ui-sshkeysview_1.0.0-1_all.ipk
-# or, once published to the feed:
-opkg update --force-signature && opkg install --force-signature gl-sdk4-sshkeys gl-sdk4-ui-sshkeysview
+curl -fsSL https://digitalcybersoft.github.io/glinet-sshkeymanagement/setup.sh -o /tmp/setup.sh
+sh /tmp/setup.sh --dry-run     # detect arch, change nothing
+sh /tmp/setup.sh               # add feed + install
 ```
 
-Then open the router panel; the entry appears under **Applications → SSH Keys**.
+Or from local ipks:
 
-## Publish (via the glinet-tailscale-feed)
+```sh
+opkg install ./gui/gl-sdk4-sshkeys_1.0.0-1_all.ipk ./gui/gl-sdk4-ui-sshkeysview_1.0.0-1_all.ipk
+```
 
-These `_all.ipk` files are arch-independent. To serve them from the existing feed:
-copy both into that repo's `gui/` and run its `build-feed.yml` workflow, which
-re-runs `assemble_site.sh` (it globs `gui/*_all.ipk` into every arch).
+Then open the router panel; the entry appears under **System → SSH Keys**.
+
+## Publish (its own GitHub Pages feed)
+
+This repo *is* an opkg feed served at
+`https://digitalcybersoft.github.io/glinet-sshkeymanagement/`. The `pages.yml`
+workflow builds both ipks (`tools/build_gui.sh`), assembles a per-arch feed
+(`tools/assemble_site.sh` fans the two `Architecture: all` ipks into all seven
+arch dirs and runs `mkindex.py`), and deploys to Pages on every push to `main`.
+
+To build the site locally:
+
+```sh
+tools/build_gui.sh && tools/assemble_site.sh _site
+```
 
 ## RPC surface (`object: sshkeys`)
 
@@ -99,4 +115,6 @@ base64 key data, and rejects options-prefixed lines and duplicates.
 v1. Backend logic (parser, managed-block renderer) is unit-tested off-device. The
 panel bundle is hand-authored to GL's webpack-UMD contract and must be verified on
 real hardware: confirm the SPA routes the new `sshkeysview` (GL panels are loaded
-data-driven from `menu.d`, but a brand-new view name should be smoke-tested first).
+data-driven from `menu.d`, but a brand-new view name should be smoke-tested first),
+and confirm `parent: "system"` resolves to GL's System menu group on your firmware
+(the exact parent token was not read off a device).

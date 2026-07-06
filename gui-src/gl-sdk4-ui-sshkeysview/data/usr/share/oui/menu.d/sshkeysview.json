@@ -1,11 +1,9 @@
 {
-    "index": 103,
+    "index": 45,
     "view": "sshkeysview",
     "title": "SSH Keys",
     "level": 2,
-    "parent": "applications",
-    "parent_icon": "application",
-    "parent_index": 50,
+    "parent": "system",
     "show_mode": [
         "router"
     ]

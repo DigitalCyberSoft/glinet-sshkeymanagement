@@ -1,0 +1,46 @@
+name: pages
+
+# Build the two GUI ipks from gui-src/, assemble the per-arch opkg feed, and
+# deploy it to GitHub Pages. Runs on push to main and on manual dispatch.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url || steps.deploy_retry.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build GUI ipks (gzip-tar)
+        run: bash tools/build_gui.sh
+      - name: Assemble feed site
+        run: bash tools/assemble_site.sh _site
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      # deploy-pages intermittently returns a backend transient ("try again
+      # later") that is not a content error. One inline retry absorbs it; a second
+      # genuine failure still fails the job.
+      - id: deploy
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+      - name: Wait out the Pages backend transient
+        if: steps.deploy.outcome == 'failure'
+        run: sleep 45
+      - id: deploy_retry
+        if: steps.deploy.outcome == 'failure'
+        uses: actions/deploy-pages@v4
