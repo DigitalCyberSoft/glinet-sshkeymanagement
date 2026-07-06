@@ -25,6 +25,14 @@ local function trim(s)
     return (tostring(s or ""):gsub("^%s+", ""):gsub("%s+$", ""))
 end
 
+-- uci option values and authorized_keys lines must stay single-line and free of
+-- control characters: collapse whitespace runs, drop anything not printable
+-- ASCII. ([%w%p ] rather than %g: the runtime is Lua 5.1, which lacks %g.)
+local function clean_text(s)
+    s = trim(s):gsub("%s+", " ")
+    return (s:gsub("[^%w%p ]", ""))
+end
+
 -- Parse one authorized_keys line into {type, blob, comment}. Rejects anything
 -- whose type we cannot verify or whose key data is not base64. Options prefixes
 -- (e.g. `no-touch-required`) are NOT accepted here: v1 stores bare keys only.
@@ -37,7 +45,7 @@ local function parse_pubkey(line)
     if not blob:match("^[A-Za-z0-9+/]+=*$") or #blob < 40 then
         return nil, "invalid key data"
     end
-    return { ktype = ktype, blob = blob, comment = trim(comment) }
+    return { ktype = ktype, blob = blob, comment = clean_text(comment) }
 end
 
 local function render()
@@ -64,33 +72,57 @@ function M.list()
     return { keys = keys }
 end
 
+-- The textarea accepts several keys at once, one per line. Parse every line
+-- first and reject the whole request on the first bad one, so a paste is
+-- atomic: nothing is stored unless everything parses.
 function M.add(params)
     params = params or {}
-    local parsed, err = parse_pubkey(params.key)
-    if not parsed then return { error = err or "invalid key" } end
+
+    local list = {}
+    for line in tostring(params.key or ""):gmatch("[^\r\n]+") do
+        if trim(line) ~= "" then
+            local parsed, err = parse_pubkey(line)
+            if not parsed then return { error = err or "invalid key" } end
+            list[#list + 1] = parsed
+        end
+    end
+    if #list == 0 then return { error = "empty" } end
 
     local c = uci.cursor()
-    local dup = false
+    local have = {}
     c:foreach("sshkeys", "key", function(s)
-        if s.blob == parsed.blob then dup = true end
+        if s.blob then have[s.blob] = true end
     end)
-    if dup then return { error = "duplicate key" } end
 
-    local name = trim(params.name)
-    if name == "" then
-        name = parsed.comment ~= "" and parsed.comment or parsed.ktype
+    local name = clean_text(params.name)
+    local added, skipped = 0, 0
+    for _, parsed in ipairs(list) do
+        if have[parsed.blob] then
+            skipped = skipped + 1
+        else
+            have[parsed.blob] = true
+            -- The typed-in name labels a single key; on a multi-key paste each
+            -- key falls back to its own comment (or type).
+            local kname = name
+            if kname == "" or #list > 1 then
+                kname = parsed.comment ~= "" and parsed.comment or parsed.ktype
+            end
+            local sid = c:add("sshkeys", "key")
+            c:set("sshkeys", sid, "name", kname)
+            c:set("sshkeys", sid, "type", parsed.ktype)
+            c:set("sshkeys", sid, "blob", parsed.blob)
+            if parsed.comment ~= "" then
+                c:set("sshkeys", sid, "comment", parsed.comment)
+            end
+            c:set("sshkeys", sid, "enabled", "1")
+            added = added + 1
+        end
     end
-
-    local sid = c:add("sshkeys", "key")
-    c:set("sshkeys", sid, "name", name)
-    c:set("sshkeys", sid, "type", parsed.ktype)
-    c:set("sshkeys", sid, "blob", parsed.blob)
-    c:set("sshkeys", sid, "comment", parsed.comment)
-    c:set("sshkeys", sid, "enabled", "1")
+    if added == 0 then return { error = "duplicate key" } end
     c:commit("sshkeys")
 
     render()
-    return { ok = true, id = sid }
+    return { ok = true, added = added, skipped = skipped }
 end
 
 function M.remove(params)

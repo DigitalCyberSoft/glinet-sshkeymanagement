@@ -48,6 +48,8 @@ pack() { # $1 = package source dir name
   for s in preinst postinst prerm postrm; do
     if [ -f "$src/$s" ]; then cp "$src/$s" "$work/ctrl/$s"; chmod 755 "$work/ctrl/$s"; members="$members ./$s"; fi
   done
+  # conffiles marks /etc files opkg must not clobber on upgrade (stored keys!)
+  if [ -f "$src/conffiles" ]; then cp "$src/conffiles" "$work/ctrl/conffiles"; chmod 644 "$work/ctrl/conffiles"; members="$members ./conffiles"; fi
   ( cd "$work/ctrl" && tar "${TARFLAGS[@]}" -czf "$work/control.tar.gz" $members )
 
   local ipk="$OUT/${name}_${filever}_${arch}.ipk"

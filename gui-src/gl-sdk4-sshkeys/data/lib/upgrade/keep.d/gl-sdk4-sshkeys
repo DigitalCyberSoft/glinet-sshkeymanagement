@@ -2,5 +2,6 @@
 /etc/dropbear/authorized_keys
 /usr/bin/gl_sshkeys
 /usr/lib/oui-httpd/rpc/sshkeys
+/usr/share/gl-validator.d/sshkeys.lua
 /etc/init.d/sshkeys
 /etc/rc.d/S95sshkeys
