@@ -1,5 +1,5 @@
 Package: gl-sdk4-sshkeys
-Version: 1:1.0.1-1
+Version: 1:1.0.3-1
 Depends: libc, libuci-lua
 Source: glinet-sshkeymanagement
 SourceName: gl-sdk4-sshkeys

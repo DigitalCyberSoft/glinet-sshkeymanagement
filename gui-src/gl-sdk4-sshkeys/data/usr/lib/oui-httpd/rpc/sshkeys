@@ -33,6 +33,21 @@ local function clean_text(s)
     return (s:gsub("[^%w%p ]", ""))
 end
 
+-- uci auto-names anonymous sections positionally (cfgNNNNNN derived from index),
+-- so deleting one RENAMES its successors: the id the panel holds for key B can,
+-- after A is removed, point at key C. remove/set_enabled key off that id, so a
+-- stale list would toggle or delete the wrong key. Give each section a STABLE
+-- name derived from its blob (djb2, 8 hex) instead, so ids never move. Collisions
+-- between distinct blobs are resolved by a suffix; identical blobs are caught as
+-- duplicates before we get here.
+local function section_name(blob)
+    local h = 5381
+    for i = 1, #blob do
+        h = (h * 33 + blob:byte(i)) % 4294967296
+    end
+    return string.format("k%08x", h)
+end
+
 -- Parse one authorized_keys line into {type, blob, comment}. Rejects anything
 -- whose type we cannot verify or whose key data is not base64. Options prefixes
 -- (e.g. `no-touch-required`) are NOT accepted here: v1 stores bare keys only.
@@ -107,7 +122,14 @@ function M.add(params)
             if kname == "" or #list > 1 then
                 kname = parsed.comment ~= "" and parsed.comment or parsed.ktype
             end
-            local sid = c:add("sshkeys", "key")
+            -- stable, blob-derived section name; suffix on the rare hash clash
+            local sid = section_name(parsed.blob)
+            if c:get("sshkeys", sid) then
+                local n = 1
+                while c:get("sshkeys", sid .. "_" .. n) do n = n + 1 end
+                sid = sid .. "_" .. n
+            end
+            c:set("sshkeys", sid, "key")
             c:set("sshkeys", sid, "name", kname)
             c:set("sshkeys", sid, "type", parsed.ktype)
             c:set("sshkeys", sid, "blob", parsed.blob)

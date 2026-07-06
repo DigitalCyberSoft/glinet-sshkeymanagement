@@ -1,8 +1,19 @@
 #!/bin/sh
-# Enable the boot re-render, apply the current uci keys now, and reload rpcd so the
-# new "sshkeys" rpc object is served. Skip in an offline image root.
+# Enable the boot re-render and apply the current uci keys now. Skip in an
+# offline image root.
 [ -n "$IPKG_INSTROOT" ] && exit 0
 /etc/init.d/sshkeys enable 2>/dev/null
 [ -x /usr/bin/gl_sshkeys ] && /usr/bin/gl_sshkeys render 2>/dev/null
+# The "sshkeys" rpc object is a Lua script under oui-httpd, which runs INSIDE
+# nginx (openresty) and caches each object's module in the worker for the
+# worker's lifetime. On a package UPGRADE the new script on disk is ignored
+# until the workers recycle, so an add would silently run the old code (this is
+# what made multi-key adds misbehave after the first release). Recycle the
+# workers so the new module loads. `nginx -s reload` HUPs the master directly and
+# re-reads the Lua; the procd `/etc/init.d/nginx reload` is a no-op here (the
+# init script defines no reload action and only reacts to nginx.conf changes).
+if command -v nginx >/dev/null 2>&1; then
+    nginx -s reload 2>/dev/null || /etc/init.d/nginx restart 2>/dev/null
+fi
 /etc/init.d/rpcd restart 2>/dev/null
 exit 0
