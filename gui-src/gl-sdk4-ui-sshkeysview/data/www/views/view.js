@@ -146,4 +146,4 @@ module.exports = function(t) {
 
     e.default = component
   }
-});
+}).default;
