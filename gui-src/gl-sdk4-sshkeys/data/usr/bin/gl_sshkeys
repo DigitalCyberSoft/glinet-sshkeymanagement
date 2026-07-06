@@ -1,0 +1,64 @@
+#!/bin/sh
+# Render the managed SSH-key block into dropbear's authorized_keys from uci
+# (/etc/config/sshkeys). Everything OUTSIDE our markers is left untouched -- in
+# particular GL's own cloud-management keys, which must not be clobbered.
+#
+# Invoked by the rpc handler (/usr/lib/oui-httpd/rpc/sshkeys) after any change and
+# by /etc/init.d/sshkeys on every boot, so panel-added keys survive a reboot or a
+# firmware upgrade even if the firmware ships a pristine authorized_keys.
+. /lib/functions.sh
+
+AK="/etc/dropbear/authorized_keys"
+BEGIN="# --- gl-sdk4-sshkeys managed block: do not edit between markers ---"
+END="# --- end gl-sdk4-sshkeys managed block ---"
+
+block=""
+
+append_key() {
+	local s="$1" type blob comment enabled
+	config_get type "$s" type
+	config_get blob "$s" blob
+	config_get comment "$s" comment
+	config_get_bool enabled "$s" enabled 1
+	[ "$enabled" = 1 ] || return 0
+	[ -n "$type" ] && [ -n "$blob" ] || return 0
+	if [ -n "$comment" ]; then
+		block="${block}${type} ${blob} ${comment}
+"
+	else
+		block="${block}${type} ${blob}
+"
+	fi
+}
+
+render() {
+	local tmp
+	config_load sshkeys
+	config_foreach append_key key
+
+	mkdir -p /etc/dropbear
+	[ -f "$AK" ] || : > "$AK"
+
+	tmp="$(mktemp)" || return 1
+	# Keep every line that is not inside our managed block.
+	awk -v b="$BEGIN" -v e="$END" '
+		$0==b {inb=1; next}
+		$0==e {inb=0; next}
+		!inb {print}
+	' "$AK" > "$tmp"
+
+	{
+		cat "$tmp"
+		printf '%s\n' "$BEGIN"
+		printf '%s' "$block"
+		printf '%s\n' "$END"
+	} > "$AK"
+
+	rm -f "$tmp"
+	chmod 600 "$AK"
+}
+
+case "$1" in
+	render|apply|"") render ;;
+	*) echo "usage: $0 render" >&2; exit 1 ;;
+esac

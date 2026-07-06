@@ -1,0 +1,9 @@
+Package: gl-sdk4-sshkeys
+Version: 1:1.0.0-1
+Depends: libc, libuci-lua
+Source: glinet-sshkeymanagement
+SourceName: gl-sdk4-sshkeys
+Section: base
+Architecture: all
+Installed-Size: 4096
+Description:  SSH authorized_keys manager backend (rpc + uci store + boot render) for GL.iNet

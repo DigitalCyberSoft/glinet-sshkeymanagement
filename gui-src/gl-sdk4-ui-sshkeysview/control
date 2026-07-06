@@ -1,0 +1,9 @@
+Package: gl-sdk4-ui-sshkeysview
+Version: 1:1.0.0-1
+Depends: libc, gl-sdk4-sshkeys, gl-sdk4-ui-core
+Source: glinet-sshkeymanagement
+SourceName: gl-sdk4-ui-sshkeysview
+Section: base
+Architecture: all
+Installed-Size: 8192
+Description:  SSH key manager panel (GL oui-httpd view) for GL.iNet

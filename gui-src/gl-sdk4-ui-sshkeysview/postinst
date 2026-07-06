@@ -1,0 +1,5 @@
+#!/bin/sh
+# The panel bundle is served by nginx via gzip_static from the shipped
+# <pkg>.common.js.gz; nothing to do at install time beyond the offline-root guard.
+[ -n "$IPKG_INSTROOT" ] && exit 0
+exit 0

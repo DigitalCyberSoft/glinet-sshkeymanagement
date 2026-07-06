@@ -1,0 +1,124 @@
+--[[
+    @object-name: sshkeys
+    @object-desc: Manage dropbear authorized_keys (root) from the panel
+--]]
+
+local uci = require "uci"
+
+local M = {}
+
+local RENDER = "/usr/bin/gl_sshkeys"
+
+-- Key types dropbear can actually verify. sk-* are FIDO/U2F security keys
+-- (YubiKey); dropbear >= 2022.82 accepts them in authorized_keys.
+local ALLOWED_TYPES = {
+    ["ssh-ed25519"] = true,
+    ["ssh-rsa"] = true,
+    ["ecdsa-sha2-nistp256"] = true,
+    ["ecdsa-sha2-nistp384"] = true,
+    ["ecdsa-sha2-nistp521"] = true,
+    ["sk-ssh-ed25519@openssh.com"] = true,
+    ["sk-ecdsa-sha2-nistp256@openssh.com"] = true,
+}
+
+local function trim(s)
+    return (tostring(s or ""):gsub("^%s+", ""):gsub("%s+$", ""))
+end
+
+-- Parse one authorized_keys line into {type, blob, comment}. Rejects anything
+-- whose type we cannot verify or whose key data is not base64. Options prefixes
+-- (e.g. `no-touch-required`) are NOT accepted here: v1 stores bare keys only.
+local function parse_pubkey(line)
+    line = trim(line)
+    if line == "" then return nil, "empty" end
+    local ktype, blob, comment = line:match("^(%S+)%s+(%S+)%s*(.*)$")
+    if not ktype or not blob then return nil, "malformed" end
+    if not ALLOWED_TYPES[ktype] then return nil, "unsupported key type" end
+    if not blob:match("^[A-Za-z0-9+/]+=*$") or #blob < 40 then
+        return nil, "invalid key data"
+    end
+    return { ktype = ktype, blob = blob, comment = trim(comment) }
+end
+
+local function render()
+    local p = ngx.pipe.spawn({ RENDER, "render" })
+    if p then p:wait() end
+end
+
+-- List installed keys. Never returns the full blob back into the DOM; a 16-char
+-- tail is enough to disambiguate keys in the UI.
+function M.list()
+    local c = uci.cursor()
+    local keys = {}
+    c:foreach("sshkeys", "key", function(s)
+        local blob = s.blob or ""
+        keys[#keys + 1] = {
+            id = s[".name"],
+            name = s.name or "",
+            type = s.type or "",
+            comment = s.comment or "",
+            tail = (#blob > 16) and blob:sub(-16) or blob,
+            enabled = s.enabled ~= "0",
+        }
+    end)
+    return { keys = keys }
+end
+
+function M.add(params)
+    params = params or {}
+    local parsed, err = parse_pubkey(params.key)
+    if not parsed then return { error = err or "invalid key" } end
+
+    local c = uci.cursor()
+    local dup = false
+    c:foreach("sshkeys", "key", function(s)
+        if s.blob == parsed.blob then dup = true end
+    end)
+    if dup then return { error = "duplicate key" } end
+
+    local name = trim(params.name)
+    if name == "" then
+        name = parsed.comment ~= "" and parsed.comment or parsed.ktype
+    end
+
+    local sid = c:add("sshkeys", "key")
+    c:set("sshkeys", sid, "name", name)
+    c:set("sshkeys", sid, "type", parsed.ktype)
+    c:set("sshkeys", sid, "blob", parsed.blob)
+    c:set("sshkeys", sid, "comment", parsed.comment)
+    c:set("sshkeys", sid, "enabled", "1")
+    c:commit("sshkeys")
+
+    render()
+    return { ok = true, id = sid }
+end
+
+function M.remove(params)
+    params = params or {}
+    local id = params.id
+    if not id then return { error = "missing id" } end
+
+    local c = uci.cursor()
+    if c:get("sshkeys", id) ~= "key" then return { error = "not found" } end
+    c:delete("sshkeys", id)
+    c:commit("sshkeys")
+
+    render()
+    return { ok = true }
+end
+
+function M.set_enabled(params)
+    params = params or {}
+    local id = params.id
+    if not id then return { error = "missing id" } end
+
+    local c = uci.cursor()
+    if c:get("sshkeys", id) ~= "key" then return { error = "not found" } end
+    c:set("sshkeys", id, "enabled", params.enabled and "1" or "0")
+    c:commit("sshkeys")
+
+    render()
+    return { ok = true }
+end
+
+return M

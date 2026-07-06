@@ -1,0 +1,8 @@
+#!/bin/sh
+# Enable the boot re-render, apply the current uci keys now, and reload rpcd so the
+# new "sshkeys" rpc object is served. Skip in an offline image root.
+[ -n "$IPKG_INSTROOT" ] && exit 0
+/etc/init.d/sshkeys enable 2>/dev/null
+[ -x /usr/bin/gl_sshkeys ] && /usr/bin/gl_sshkeys render 2>/dev/null
+/etc/init.d/rpcd restart 2>/dev/null
+exit 0

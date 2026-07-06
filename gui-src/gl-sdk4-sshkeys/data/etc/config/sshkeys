@@ -1,0 +1,11 @@
+config sshkeys 'settings'
+	option enabled '1'
+
+# `config key` sections are added by the panel (rpc object "sshkeys"). Each holds:
+#   option name    'human label'
+#   option type    'ssh-ed25519' | 'sk-ssh-ed25519@openssh.com' | ...
+#   option blob    'AAAA... (base64, no type prefix, no comment)'
+#   option comment 'user@host'
+#   option enabled '1'
+# This file is preserved across firmware upgrades (lib/upgrade/keep.d) and
+# rendered into /etc/dropbear/authorized_keys on every boot by /etc/init.d/sshkeys.

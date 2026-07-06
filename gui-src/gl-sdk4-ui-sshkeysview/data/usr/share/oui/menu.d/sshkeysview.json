@@ -1,0 +1,12 @@
+{
+    "index": 103,
+    "view": "sshkeysview",
+    "title": "SSH Keys",
+    "level": 2,
+    "parent": "applications",
+    "parent_icon": "application",
+    "parent_index": 50,
+    "show_mode": [
+        "router"
+    ]
+}

@@ -1,0 +1,10 @@
+#!/bin/sh /etc/rc.common
+# Re-render the managed authorized_keys block from uci on boot. This is what makes
+# panel-added keys survive a reboot or a firmware upgrade: even if the new firmware
+# ships a pristine /etc/dropbear/authorized_keys, the keys are re-applied from the
+# preserved /etc/config/sshkeys before anyone needs to log in.
+START=95
+
+start() {
+	[ -x /usr/bin/gl_sshkeys ] && /usr/bin/gl_sshkeys render
+}

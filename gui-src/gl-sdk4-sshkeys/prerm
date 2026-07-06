@@ -1,0 +1,8 @@
+#!/bin/sh
+# On removal, stop re-rendering on boot. Deliberately leave the already-rendered
+# keys in /etc/dropbear/authorized_keys in place: silently dropping them here could
+# lock the admin out. Removing keys is an explicit panel action, not a side effect
+# of uninstalling the manager.
+[ -n "$IPKG_INSTROOT" ] && exit 0
+/etc/init.d/sshkeys disable 2>/dev/null
+exit 0
