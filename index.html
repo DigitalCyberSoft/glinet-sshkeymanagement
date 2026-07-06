@@ -24,10 +24,20 @@ from the router's own admin panel. Keys survive reboots and firmware upgrades.</
 <img src="sshkeys-panel.png" alt="SSH Keys panel (UI mockup)">
 
 <h2>Install</h2>
+<p>Feed URL (one feed serves every device):</p>
+<pre>https://digitalcybersoft.github.io/glinet-sshkeymanagement</pre>
+
+<p>Run the installer:</p>
 <pre>curl -fsSL https://digitalcybersoft.github.io/glinet-sshkeymanagement/setup.sh -o /tmp/setup.sh
 sh /tmp/setup.sh</pre>
+
+<p>Or add the feed manually:</p>
+<pre>echo 'src/gz glsshkeys https://digitalcybersoft.github.io/glinet-sshkeymanagement' &gt;&gt; /etc/opkg/customfeeds.conf
+opkg update --force-signature
+opkg install --force-signature gl-sdk4-sshkeys gl-sdk4-ui-sshkeysview</pre>
+
 <p class="note">Then open <b>System &rarr; SSH Keys</b>. The feed is <b>unsigned</b>, so
-<code>setup.sh</code> uses <code>--force-signature</code>. Both packages are
-<code>Architecture: all</code>, so one feed serves every device.</p>
+<code>--force-signature</code> is required on both <code>opkg</code> commands. Both packages
+are <code>Architecture: all</code>, so one feed serves every device.</p>
 </body>
 </html>

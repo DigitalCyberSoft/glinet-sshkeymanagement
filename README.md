@@ -9,14 +9,29 @@ router's own admin panel. Keys survive reboots and firmware upgrades.
 
 ## Install
 
-On the router:
+Feed URL (one feed, every device):
+
+```
+https://digitalcybersoft.github.io/glinet-sshkeymanagement
+```
+
+On the router, either run the installer:
 
 ```sh
 curl -fsSL https://digitalcybersoft.github.io/glinet-sshkeymanagement/setup.sh -o /tmp/setup.sh
 sh /tmp/setup.sh
 ```
 
-Then open **System → SSH Keys** in the panel.
+...or add the feed manually:
+
+```sh
+echo 'src/gz glsshkeys https://digitalcybersoft.github.io/glinet-sshkeymanagement' >> /etc/opkg/customfeeds.conf
+opkg update --force-signature
+opkg install --force-signature gl-sdk4-sshkeys gl-sdk4-ui-sshkeysview
+```
+
+The feed is unsigned, so `--force-signature` is required on both commands. Then
+open **System → SSH Keys** in the panel.
 
 ## What it does
 
