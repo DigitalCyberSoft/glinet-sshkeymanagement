@@ -23,7 +23,17 @@ touch "$FEEDS"
 sed -i "/ $FEED /d" "$FEEDS"
 echo "src/gz $FEED $BASE" >> "$FEEDS"
 
-opkg update --force-signature
+# A forced update still exits non-zero whenever ANY configured feed is unsigned
+# (each missing Packages.sig counts as an error, and ours always is), so under
+# set -e the bare call aborted before the install. Its exit code says nothing
+# about our feed: check that our package list landed instead. `opkg info` can't
+# tell -- GL's opkg exits 0 even for a package no list carries.
+opkg update --force-signature || true
+LISTS_DIR=$(awk '$1=="lists_dir" {print $NF}' /etc/opkg.conf 2>/dev/null) || LISTS_DIR=""
+if [ ! -s "${LISTS_DIR:-/var/opkg-lists}/$FEED" ]; then
+  echo "ERROR: $FEED package list missing after opkg update; check the router's network/DNS and that $BASE/Packages is reachable." >&2
+  exit 1
+fi
 opkg install --force-signature gl-sdk4-sshkeys gl-sdk4-ui-sshkeysview
 
 echo "done. Open the router panel: System -> SSH Keys."
